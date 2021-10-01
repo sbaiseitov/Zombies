@@ -1,0 +1,212 @@
+---
+title: "Comparison of classification methods applied to Zombie dataset: Tree-based methods, Logistic Regression, kNN, Linear Discriminant Analysis, Quadratic Discriminant Analysis"
+author: "Sanzhar Baiseitov"
+output:
+  html_document: default
+  word_document: default
+---
+The data set has 200 observation points, these are people encountered randomly during a hypothetical zombie apocalypse. Using 13 predictor variables the goal of the classification task is to predict whether a person is a human or a zombie. 9 predictors are factors with 2 to 3 levels. This poses a challenge for both parametric and non-parametric methods by distributions being non-normal and observations grouped close to the origin in 9 out of 13 dimensions. The dataset was found on Kaggle and was originally posted on Datacamp as a project for logistic regression, however, an array of classification methods will be attempted here focusing on classification rather than analyzing coefficients of regression like in the original task. Since this data was designed for logistic regression specifically, it provides a peek that this classification method might perform well with this data set, but let's see.
+
+Below is the original description:
+https://www.datacamp.com/projects/668
+
+It is no longer just a threat; it is now a reality! Zombies have been spotted all over the U.S. Work with your colleagues at the [Centers for Disease Control and Prevention](https://www.cdc.gov/cpr/zombie/index.htm) to identify the characteristics and supplies that seem to keep humans safe. Develop a logistic regression model that predicts the probability of becoming a zombie based on personal characteristics like age and sex, type of neighborhood people live in, and what emergency supplies are available. Practice bivariate tests like chi-squared and t-test to identify the most relevant variables for the model, develop and run the model, check model assumptions, and use the model to predict the probability of becoming a zombie for friends, family, and even yourself! To complete this Project, you should be comfortable with basic data analysis in base R and visualization in `ggplot2`, and be familiar with chi-squared test, t-tests, and logistic regression. The zombies dataset was created for this Project based on emergency preparedness recommendations. It consists of 200 observations and 14 variables. The variables include personal characteristics like age and sex, zombie status, a description of the neighborhood each participant lives in, and measures of supplies.
+
+Context
+News reports suggest that the impossible has become possible…zombies have appeared on the streets of the US! What should we do? The Centers for Disease Control and Prevention (CDC) zombie preparedness website recommends storing water, food, medication, tools, sanitation items, clothing, essential documents, and first aid supplies. Thankfully, we are CDC analysts and are prepared, but it may be too late for others!
+
+Content
+Our team decides to identify supplies that protect people and coordinate supply distribution. A few brave data collectors volunteer to check on 200 randomly selected adults who were alive before the zombies. We have recent data for the 200 on age and sex, how many are in their household, and their rural, suburban, or urban location. Our heroic volunteers visit each home and record zombie status and preparedness. Now it's our job to figure out which supplies are associated with safety!
+
+Acknowledgements
+DataCamp
+
+```{r}
+rm(list = ls())
+setwd("C:/Users/Sanzhar/OneDrive/Documents/Bay Path/Data mining/Working folder")
+library(rpart)
+```
+
+```{r}
+zom = read.csv("zombies.csv")
+my_zom = zom[,2:14]
+head(my_zom)
+```
+
+
+
+
+#Data preparation. Convert all categorical variables into factors and assign 0 to the base level
+```{r}
+my_zom$zombie = factor(my_zom$zombie)
+levels(my_zom$zombie) = c(0, 1)#human = 0; zombie = 1
+
+my_zom$sex = as.factor(my_zom$sex)
+levels(my_zom$sex) = c(0, 1)#female = 0; male = 1
+
+my_zom$rurality = as.factor(my_zom$rurality)
+levels(my_zom$rurality) = c(0,1,2) #rural = 0; suburban = 1, urban = 2
+
+my_zom$food = as.factor(my_zom$food)
+levels(my_zom$food) = c(1, 0)#no food = 0; food = 1
+
+my_zom$medication = as.factor(my_zom$medication)
+levels(my_zom$medication) = c(1, 0)#no med = 0; med = 1
+
+my_zom$tools = as.factor(my_zom$tools)
+levels(my_zom$tools) = c(0, 1)#no tools = 0; tools = 1
+
+my_zom$firstaid = as.factor(my_zom$firstaid)
+levels(my_zom$firstaid) = c(1, 0)#No First Aid = 0; First Aid = 1
+
+my_zom$sanitation = as.factor(my_zom$sanitation)
+levels(my_zom$sanitation) = c(0, 1)#No sanitation = 0; Sanitation = 1
+
+my_zom$clothing = as.factor(my_zom$clothing)
+levels(my_zom$clothing) = c(1, 0)#No clothing = 0; Clothing = 1
+
+my_zom$documents = as.factor(my_zom$documents)
+levels(my_zom$documents) = c(1, 0)#No documents = 0; Documents = 1
+
+```
+```{r}
+head(my_zom)
+str(my_zom)
+```
+#create test and training sets
+```{r}
+set.seed(500)
+test.indices = sort(sample(1:nrow(my_zom), round((1/3)*nrow(my_zom))))
+test = my_zom[test.indices,]
+train = my_zom[-test.indices,]
+```
+#grow a single tree
+```{r}
+model.control = rpart.control(minsplit = 4, xval = 5, cp =0)
+fit = rpart(zombie~., data = train, method = "class", control = model.control)
+```
+
+```{r}
+library(rpart.plot)
+rpart.plot(fit, tweak = 1.5)
+```
+```{r}
+min_cp = which.min(fit$cptable[,4])
+min_cp
+```
+#prune the tree
+```{r}
+pruned_fit = prune(fit, cp = fit$cptable[min_cp,1] )
+rpart.plot(pruned_fit, type =2)
+```
+#predict with a single tree
+```{r}
+my_pred = predict(pruned_fit, newdata = test, type = "class")
+y_hat = as.numeric(my_pred)-1
+y_true = as.numeric(test$zombie)-1
+misclass_tree = sum(abs(y_true - y_hat))/length(y_hat)
+misclass_tree
+library(caret)
+
+```
+#Random forest
+```{r}
+#install.packages("randomForest")
+library(randomForest)
+rf.fit = randomForest(zombie~., data = train, n.tree = 100000)
+varImpPlot(rf.fit)
+```
+```{r}
+my_pred_rf = predict(rf.fit, newdata = test, type = "response")
+y_hat_rf = as.numeric(my_pred_rf)-1
+misclass_rf = sum(abs(y_true - y_hat_rf))/length(y_hat_rf)
+misclass_rf
+```
+#Bagging
+```{r}
+dim(my_zom)
+bag.fit = randomForest(zombie~., data = train, n.tree = 100000, mtry = 12)
+varImpPlot(bag.fit)
+```
+```{r}
+my_pred_bag = predict(bag.fit, newdata = test, type = "response")
+y_hat_bag = as.numeric(my_pred_bag)-1
+misclass_bag = sum(abs(y_true - y_hat_bag))/length(y_hat_bag)
+misclass_bag
+```
+#Boosting
+```{r}
+#install.packages("gbm")
+library(gbm)
+boost.fit1 = gbm(zombie~.,data = train, n.trees=10000, distribution = "adaboost", shrinkage = 0.1, interaction.depth = 1)
+boost.fit2 = gbm(zombie~.,data = train, n.trees=10000, distribution = "adaboost", shrinkage = 0.6, interaction.depth = 3)
+summary(boost.fit1)
+summary(boost.fit2)
+```
+#boosting seems to favor a continuous variable age and a factor with largest number of levels - rurality
+```{r}
+y_hat_boost1 = predict(boost.fit1, newdata = test, n.trees = 10000, type = "response")
+misclass_boost1 = sum(abs(y_hat_boost1-y_true))/length(y_true)
+misclass_boost1
+```
+```{r}
+y_hat_boost2 = predict(boost.fit2, newdata = test, n.trees = 10000, type = "response")
+misclass_boost2 = sum(abs(y_hat_boost2-y_true))/length(y_true)
+misclass_boost2
+
+```
+#Boosting shows and unusually large misclassification error
+
+#Logistic regression
+```{r}
+log.fit = glm(zombie~., data = train, family = "binomial")
+summary(log.fit)
+my_pred_log = predict(log.fit, newdata = test, type ="response")
+y_hat_log = round(my_pred_log)
+
+misclass_log = sum(abs(y_hat_log - y_true))/length(y_true)
+misclass_log
+```
+
+#KNN
+```{r}
+library(class)
+knn_train = train[,-1]
+knn_test = test[,-1]
+cl = train[,1]
+knn.fit = knn(train, test, cl, k = 1)
+y_hat_knn = as.numeric(knn.fit)-1
+misclass_knn = sum(abs(y_hat_knn - y_true))/length(y_true)
+misclass_knn
+```
+
+#LDA
+```{r}
+library(MASS)
+lda.fit = lda(zombie~., data = train)
+my_pred_lda = predict(lda.fit, newdata = test, type = "response")
+y_hat_lda = as.numeric(my_pred_lda$class)-1
+misclass_lda = sum(abs(y_hat_lda - y_true))/length(y_true)
+misclass_lda
+```
+
+
+#QDA
+```{r}
+qda.fit = qda(zombie~., data = train)
+my_pred_qda = predict(qda.fit, newdata = test, type = "response")
+y_hat_qda = as.numeric(my_pred_qda$class)-1
+misclass_qda = sum(abs(y_hat_qda - y_true))/length(y_true)
+misclass_qda
+```
+
+
+#let's look at the test errors again
+```{r}
+errors = round(rbind(misclass_tree, misclass_bag, misclass_rf, misclass_boost1, misclass_boost2, misclass_log, misclass_lda, misclass_qda, misclass_knn),4)
+errors
+```
+
+#I have examined 4 tree-based methods : a single tree, random forest, bagging and boosting. A single tree had a misclassification error of 0.20, bagging and random forest ensemble methods were able to reduce the error to 0.15 and 0.13 respectively.Of all methods, boosting performed poorly regardless of the change in the hyper parameters. All of the points in the test set were predicted as "Zombie".
+#To contrast the tree based methods, 3 parametric and 1 non-parametric methods were used to produce their test errors for a comparison. Logistic regression performed quite well. The reason for that might be in the overlapping of points and the logistic regression is known to perform well in such setting. On the other hand, we can see how KNN produced a rather large misclassification rate of 0.28. As it was suspected at the beginning of the experiment, a large number of categorical predictors have made observations crowd near the origin. 
+#LDA was the best method with a misclassification rate of 0.09, and its cousin QDA performed slightly worse - 0.13. This suggests that the decision boundaries between classes are rather linear than quadratic in shape.
